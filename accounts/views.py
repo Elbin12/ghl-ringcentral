@@ -140,7 +140,6 @@ def refresh_ringcentral_token(token):
     response_data['client_secret'] = RC_CLIENT_SECRET
     return create_token(response_data)
 
-
 def get_company_call_records(request):
     url = "https://platform.ringcentral.com/restapi/v1.0/account/~/call-log"
 
@@ -195,9 +194,3 @@ def get_company_call_records(request):
                 add_inbound_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
 
     return JsonResponse({"message": "Processed call records successfully"})
-
-
-
-
-
-        
