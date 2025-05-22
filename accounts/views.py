@@ -56,6 +56,7 @@ def tokens(request):
                 "response_text": response.text[:400]
             }, status=400)
         
+    
         # obj, created = GHLAuthCredentials.objects.update_or_create(
         #     location_id= response_data.get("locationId"),
         #     defaults={
@@ -175,3 +176,5 @@ def create_token(data):
     # #     }
     # )
     return 'token'
+def display(request):
+    return JsonResponse('testing')
