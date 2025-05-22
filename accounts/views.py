@@ -1,11 +1,15 @@
-import requests, base64
-
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.http import JsonResponse
 
+import requests, base64
+
+from .models import GHLAuthCredentials, RCToken
+from .utils import *
+
 # Create your views here.
 
+GHL_CONV_PROVIDER_ID = settings.GHL_CONV_PROVIDER_ID
 GHL_CLIENT_ID = settings.GHL_CLIENT_ID
 GHL_REDIRECTED_URI = settings.GHL_REDIRECTED_URI
 BASE_URI = settings.BASE_URI
@@ -56,41 +60,28 @@ def tokens(request):
                 "response_text": response.text[:400]
             }, status=400)
         
-        # obj, created = GHLAuthCredentials.objects.update_or_create(
-        #     location_id= response_data.get("locationId"),
-        #     defaults={
-        #         "access_token": response_data.get("access_token"),
-        #         "refresh_token": response_data.get("refresh_token"),
-        #         "expires_in": response_data.get("expires_in"),
-        #         "scope": response_data.get("scope"),
-        #         "user_type": response_data.get("userType"),
-        #         "company_id": response_data.get("companyId"),
-        #         "user_id":response_data.get("userId"),
-
-        #     }
-        # )
-        # return render(request, 'onboard.html', context = {
-        #     "message": "Authentication successful",
-        #     "access_token": response_data.get('access_token'),
-        #     "token_stored": True
-        # })
+        obj, created = GHLAuthCredentials.objects.update_or_create(
+            location_id= response_data.get("locationId"),
+            defaults={
+                "access_token": response_data.get("access_token"),
+                "refresh_token": response_data.get("refresh_token"),
+                "expires_in": response_data.get("expires_in"),
+                "scope": response_data.get("scope"),
+                "user_type": response_data.get("userType"),
+                "company_id": response_data.get("companyId"),
+                "user_id":response_data.get("userId"),
+            }
+        )
 
         print(response_data, 'response_data')
 
+        return JsonResponse('Authentication Successfull.')
+
     except requests.exceptions.JSONDecodeError:
-        return render(request, 'onboard.html', context={
-            "error": "Invalid JSON response from API",
-            "status_code": response.status_code,
-            "response_text": response.text[:500]
-        }, status=500)
+        return JsonResponse({'error': 'Invalid JSON response'})
     
 
-
-
-
-
 def get_auth_from_jwt(request):
-
     url = "https://platform.ringcentral.com/restapi/oauth/token"
 
     client_credentials = f"{RINGCENTRAL_CLIENT_ID}:{RINGCENTRAL_CLIENT_SECRET}"
@@ -107,21 +98,18 @@ def get_auth_from_jwt(request):
     }
 
     response = requests.post(url, data=payload, headers=headers)
-    # print(response.status_code)
-    # print(response.json())
     if response.status_code != 200:
         return None
     response_data = response.json()
     print(response_data)
-    # response_data['ghl_location_id'] = location_id
-    # response_data['rc_phone_no'] = rc_phone_no
-    # response_data['jwt_code'] = jwt
-    # response_data['client_id'] = client_id
-    # response_data['client_secret'] = client_secret
-    return JsonResponse(response_data)
+    response_data['ghl_location_id'] = GHLAuthCredentials.objects.first().location_id
+    response_data['rc_phone_no'] = RINGCENTRAL_PHONE
+    response_data['jwt_code'] = RINGCENTRAL_JWT
+    response_data['client_id'] = RINGCENTRAL_CLIENT_ID
+    response_data['client_secret'] = RINGCENTRAL_CLIENT_SECRET
+    return create_token(response_data)
 
-
-def refresh_token(token):
+def refresh_ringcentral_token(token):
     url = "https://platform.ringcentral.com/restapi/oauth/token"
 
     RC_CLIENT_ID = token.client_id
@@ -150,28 +138,66 @@ def refresh_token(token):
     response_data['jwt_code'] = jwt_code
     response_data['client_id'] = RC_CLIENT_ID
     response_data['client_secret'] = RC_CLIENT_SECRET
-    # print(response_data)
     return create_token(response_data)
 
 
-def create_token(data):
-    if not data.get('access_token'):
-        raise ValueError("Access token is required")
-    # # token, _ = RCToken.objects.update_or_create(
-    # #     owner_id = data.get('owner_id'),
-    # #     defaults={
-    # #         'access_token': data.get('access_token'),
-    # #         'token_type': data.get('token_type'),
-    # #         'expires_in': data.get('expires_in'),
-    # #         'refresh_token': data.get('refresh_token'),
-    # #         'refresh_token_expires_in': data.get('refresh_token_expires_in'),
-    # #         'scope': data.get('scope'),
-    # #         'ghl_location_id': data.get('ghl_location_id'),
-    # #         'rc_phone_no': data.get('rc_phone_no'),
-    # #         'jwt_code': data.get('jwt_code'),
-    # #         'client_id': data.get('client_id'),
-    # #         'client_secret': data.get('client_secret'),
-    # #         'created_at': timezone.now(),
-    # #     }
-    # )
-    return 'token'
+def get_company_call_records(request):
+    url = "https://platform.ringcentral.com/restapi/v1.0/account/~/call-log"
+
+    ghl_credential = GHLAuthCredentials.objects.first()
+    token_id = request.GET.get('token')
+    token = RCToken.objects.get(id=token_id)
+
+    headers = {
+        'Authorization': f"Bearer {token.access_token}"
+    }
+
+    response = requests.get(url, headers=headers)
+    if response.status_code == 401:
+        refresh_ringcentral_token(token)
+
+    response_data = response.json()
+    print(response_data, 'response_data')
+
+    records = response_data.get('records')
+    if not records:
+        return JsonResponse({"message": "No records found"})
+
+    for record in records:
+        direction = record.get('direction')
+        if direction == 'Outbound':
+            ph_no = record.get('to', {}).get('phoneNumber')
+            name = record.get('to', {}).get('name')
+        else:
+            ph_no = record.get('from', {}).get('phoneNumber')
+            name = record.get('from', {}).get('name')
+
+        #Search contact in GHL
+        contacts = search_ghl_contact(ghl_credential.access_token, ph_no)
+
+        if not contacts:
+            # Create contact if not found
+            contact_id = create_ghl_contact(ghl_credential.access_token, ph_no, name)
+        else:
+            print("Contact found")
+            contact_id = contacts[0].get("id")
+
+        # Search conversation
+        conv_data = search_conversations(ghl_credential.access_token, contact_id)
+        if not conv_data.get('conversations'):
+            # Create conversation if not found
+            create_conversation(ghl_credential.access_token, ghl_credential.location_id, contact_id)
+        else:
+            conv_id=conv_data.get('conversations')[0].get('id')
+            if direction == 'Outbound':
+                add_external_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
+            else:
+                add_inbound_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
+
+    return JsonResponse({"message": "Processed call records successfully"})
+
+
+
+
+
+        

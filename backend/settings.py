@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 
 from pathlib import Path
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
     'accounts'
 ]
 
@@ -128,7 +130,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
+GHL_CONV_PROVIDER_ID = os.getenv('GHL_CONV_PROVIDER_ID')
 GHL_CLIENT_ID = os.getenv('GHL_CLIENT_ID')
 GHL_CLIENT_SECRET = os.getenv('GHL_CLIENT_SECRET')
 GHL_REDIRECTED_URI = os.getenv('GHL_REDIRECTED_URI')
@@ -139,3 +141,15 @@ RINGCENTRAL_CLIENT_ID = os.getenv('RINGCENTRAL_CLIENT_ID')
 RINGCENTRAL_CLIENT_SECRET = os.getenv('RINGCENTRAL_CLIENT_SECRET')
 RINGCENTRAL_JWT = os.getenv('RINGCENTRAL_JWT')
 RINGCENTRAL_PHONE = os.getenv('RINGCENTRAL_PHONE')
+
+CELERY_BEAT_SCHEDULE = {
+    'make-api-call-every-23-hours': {
+        'task': 'accounts.tasks.make_api_call',
+        'schedule': timedelta(hours=23),
+    },
+}
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
