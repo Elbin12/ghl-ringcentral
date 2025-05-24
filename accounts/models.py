@@ -27,3 +27,10 @@ class RCToken(models.Model):
     client_id = models.CharField(max_length=255)
     client_secret = models.CharField(max_length=255)
     created_at = models.DateTimeField(default=timezone.now)
+
+class GHLContactCache(models.Model):
+    phone_number = models.CharField(max_length=20, unique=True)
+    contact_id = models.CharField(max_length=100)
+    conversation_id = models.CharField(max_length=100, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

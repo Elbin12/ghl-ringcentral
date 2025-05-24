@@ -1,4 +1,4 @@
-from datetime import timezone
+from django.utils import timezone
 import requests
 
 from .models import RCToken
@@ -26,17 +26,19 @@ def create_token(data):
     
     return token
 
-def search_conversations(access_token, contact_id):
+def search_conversations(access_token, contact_id, locationId):
     url = 'https://services.leadconnectorhq.com/conversations/search'
-    response = requests.post(
+    response = requests.get(
         url,
         headers={
             'Accept': 'application/json',
             'Authorization': f"Bearer {access_token}",
             'Version': '2021-07-28'
         },
-        json={"contactId": contact_id}
+        params={"contactId": contact_id, "locationId": locationId}
     )
+    print("Raw response: search convvvv", response.status_code, response.text, response.json())
+
     if response.status_code == 200:
         return response.json()
     return None
@@ -55,6 +57,7 @@ def add_inbound_call(access_token, conversationId, ph_no, conv_provider_id, rc_p
         "type":"Call",
         "conversationId": conversationId,
         "conversationProviderId": conv_provider_id,
+        "direction":"inbound",
         "call":{
             'to':rc_phone,
             "from":ph_no,
@@ -62,6 +65,7 @@ def add_inbound_call(access_token, conversationId, ph_no, conv_provider_id, rc_p
     }
 
     response = requests.post(url, headers=headers, json=payload)
+    print("Raw response: from inbound call", response.status_code, response.json())
 
     if response.status_code in [200, 201]:
         print("Internal call added to conversation.")
@@ -99,21 +103,22 @@ def add_external_call(access_token, conversationId, ph_no, conv_provider_id, rc_
         print("Failed to add external call:")
         return None
 
-def search_ghl_contact(access_token, phone_number):
-    url = 'https://services.leadconnectorhq.com/contacts/search'
-    response = requests.post(
+def search_ghl_contact(access_token, phone_number, locationId):
+    url = 'https://services.leadconnectorhq.com/contacts/'
+    response = requests.get(
         url,
         headers={
             'Accept': 'application/json',
             'Authorization': f"Bearer {access_token}",
             'Version': '2021-07-28'
         },
-        json={"query": phone_number}
+        params={"query": phone_number, "locationId": locationId}
     )
+    print("Raw response:", response.status_code, response.text, response.json())
     return response.json().get("contacts", [])
 
 
-def create_ghl_contact(access_token, phone, name):
+def create_ghl_contact(access_token, locationId, phone, name):
     url = 'https://services.leadconnectorhq.com/contacts/'
     if name:
         first, *last = name.split(' ')
@@ -126,7 +131,8 @@ def create_ghl_contact(access_token, phone, name):
     payload = {
         'phone': phone,
         'firstName': first_name,
-        'lastName': last_name
+        'lastName': last_name,
+        "locationId": locationId
     }
 
     response = requests.post(
@@ -142,7 +148,7 @@ def create_ghl_contact(access_token, phone, name):
     if response.status_code == 200:
         return response.json().get("contact", {}).get("id")
     else:
-        print("Failed to create contact:", response)
+        print("Failed to create contact:", response.json())
         return None
 
 
@@ -164,7 +170,7 @@ def create_conversation(access_token, locationId, contactId):
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code in [200, 201]:
         print("Conversation created")
-        return response.json()
+        return response.json().get('conversation').get('id')
     else:
-        print("Error creating conversation:", response)
+        print("Error creating conversation:", response.json())
         return None

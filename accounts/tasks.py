@@ -2,6 +2,7 @@ import requests
 from django.conf import settings
 from celery import shared_task
 from accounts.models import GHLAuthCredentials
+from .views import get_company_call_records
 
 GHL_CLIENT_ID = settings.GHL_CLIENT_ID
 GHL_CLIENT_SECRET = settings.GHL_CLIENT_SECRET
@@ -36,3 +37,7 @@ def make_api_call():
                 "user_id":new_tokens.get("userId"),
             }
         )
+    
+@shared_task
+def get_company_call_records_task():
+    get_company_call_records()

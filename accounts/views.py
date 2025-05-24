@@ -2,10 +2,18 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.http import JsonResponse
 
-import requests, base64
 
-from .models import GHLAuthCredentials, RCToken
+import requests, base64
+from datetime import datetime, timedelta
+from django.utils.timezone import now
+import pytz 
+
+from .models import GHLAuthCredentials, RCToken, GHLContactCache
 from .utils import *
+from urllib.parse import quote
+
+import json
+
 
 # Create your views here.
 
@@ -22,10 +30,12 @@ RINGCENTRAL_JWT = settings.RINGCENTRAL_JWT
 RINGCENTRAL_PHONE = settings.RINGCENTRAL_PHONE
 
 def auth_connect(request):
+    scopes = "conversations.readonly conversations.write conversations/message.readonly conversations/message.write contacts.readonly contacts.write"
+    encoded_scopes = quote(scopes)
     auth_url = ("https://marketplace.leadconnectorhq.com/oauth/chooselocation?response_type=code&"
                 f"redirect_uri={GHL_REDIRECTED_URI}&"
                 f"client_id={GHL_CLIENT_ID}&"
-                f"scope=conversations/message.readonly conversations/message.write"
+                f"scope={scopes}"
                 )
     return redirect(auth_url)
 
@@ -53,12 +63,9 @@ def tokens(request):
     response = requests.post(TOKEN_URL, data=data)
     try:
         response_data = response.json()
+        print(response.json(), 'from tokensss')
         if not response_data.get('access_token'):
-            return render(request, 'onboard.html', context={
-                "message": "Invalid JSON response from API",
-                "status_code": response.status_code,
-                "response_text": response.text[:400]
-            }, status=400)
+            return JsonResponse({"message": "Invalid JSON response from API"})
         
         obj, created = GHLAuthCredentials.objects.update_or_create(
             location_id= response_data.get("locationId"),
@@ -75,7 +82,7 @@ def tokens(request):
 
         print(response_data, 'response_data')
 
-        return JsonResponse('Authentication Successfull.')
+        return JsonResponse({'success':'Authentication Successfull.'})
 
     except requests.exceptions.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON response'})
@@ -107,7 +114,13 @@ def get_auth_from_jwt(request):
     response_data['jwt_code'] = RINGCENTRAL_JWT
     response_data['client_id'] = RINGCENTRAL_CLIENT_ID
     response_data['client_secret'] = RINGCENTRAL_CLIENT_SECRET
-    return create_token(response_data)
+    token_obj = create_token(response_data)
+
+    return JsonResponse({
+        "message": "Token created successfully",
+        "token_id": token_obj.id,
+        "access_token": token_obj.access_token
+    })
 
 def refresh_ringcentral_token(token):
     url = "https://platform.ringcentral.com/restapi/oauth/token"
@@ -140,57 +153,108 @@ def refresh_ringcentral_token(token):
     response_data['client_secret'] = RC_CLIENT_SECRET
     return create_token(response_data)
 
-def get_company_call_records(request):
+def get_company_call_records():
     url = "https://platform.ringcentral.com/restapi/v1.0/account/~/call-log"
 
     ghl_credential = GHLAuthCredentials.objects.first()
-    token_id = request.GET.get('token')
-    token = RCToken.objects.get(id=token_id)
+    token = RCToken.objects.first()
 
-    headers = {
-        'Authorization': f"Bearer {token.access_token}"
+    date_from = (now() - timedelta(minutes=5)).astimezone(pytz.UTC).isoformat()
+
+    page = 1
+    base_url = url
+    params = {
+        "dateFrom": date_from,
+        "page": page,
+        "perPage": 100
     }
+    while True:
+        print(page, 'pageeeee')
 
-    response = requests.get(url, headers=headers)
-    if response.status_code == 401:
-        refresh_ringcentral_token(token)
+        headers = {
+            'Authorization': f"Bearer {token.access_token}"
+        }
 
-    response_data = response.json()
-    print(response_data, 'response_data')
-
-    records = response_data.get('records')
-    if not records:
-        return JsonResponse({"message": "No records found"})
-
-    for record in records:
-        direction = record.get('direction')
-        if direction == 'Outbound':
-            ph_no = record.get('to', {}).get('phoneNumber')
-            name = record.get('to', {}).get('name')
+        if url == base_url:
+            response = requests.get(url, headers=headers, params=params)
         else:
-            ph_no = record.get('from', {}).get('phoneNumber')
-            name = record.get('from', {}).get('name')
+            response = requests.get(url, headers=headers)
 
-        #Search contact in GHL
-        contacts = search_ghl_contact(ghl_credential.access_token, ph_no)
+        if response.status_code == 401:
+            print('token failed d')
+            token = refresh_ringcentral_token(token)
+            headers = {
+                'Authorization': f"Bearer {token.access_token}"
+            }
+            response = requests.get(url, headers=headers, params=params)
+            print('new_response', 'new token ', response.json())
 
-        if not contacts:
-            # Create contact if not found
-            contact_id = create_ghl_contact(ghl_credential.access_token, ph_no, name)
-        else:
-            print("Contact found")
-            contact_id = contacts[0].get("id")
+        response_data = response.json()
+        print(response_data, 'response_data')
 
-        # Search conversation
-        conv_data = search_conversations(ghl_credential.access_token, contact_id)
-        if not conv_data.get('conversations'):
-            # Create conversation if not found
-            create_conversation(ghl_credential.access_token, ghl_credential.location_id, contact_id)
-        else:
-            conv_id=conv_data.get('conversations')[0].get('id')
+        records = response_data.get('records')
+        if not records:
+            navigation = response_data.get('navigation', {})
+            print(f"Records empty, checking for nextPage: {navigation}")
+            next_page = navigation.get('nextPage', {}).get('uri')
+            if not next_page:
+                break
+            url = next_page
+            params = None
+            continue
+            # return JsonResponse({"message": "No records found"})
+
+        for record in records:
+            direction = record.get('direction')
+            if direction == 'Outbound':
+                ph_no = record.get('to', {}).get('phoneNumber')
+                name = record.get('to', {}).get('name')
+            else:
+                ph_no = record.get('from', {}).get('phoneNumber')
+                name = record.get('from', {}).get('name')
+            print(ph_no, 'phone number from record')
+            cache = GHLContactCache.objects.filter(phone_number=ph_no).first()
+            if cache:
+                contact_id = cache.contact_id
+                conv_id = cache.conversation_id
+            else:
+                #Search contact in GHL
+                contacts = search_ghl_contact(ghl_credential.access_token, ph_no, ghl_credential.location_id)
+                print(contacts, 'contacts search kkd')
+
+                if not contacts:
+                    # Create contact if not found
+                    contact_id = create_ghl_contact(ghl_credential.access_token, ghl_credential.location_id, ph_no, name)
+                else:
+                    print("Contact found")
+                    contact_id = contacts[0].get("id")
+
+                # Search conversation
+                conv_data = search_conversations(ghl_credential.access_token, contact_id, ghl_credential.location_id)
+                print(conv_data, 'conv_data')
+                if not conv_data or not conv_data.get('conversations'):
+                    # Create conversation if not found
+                    conv_id = create_conversation(ghl_credential.access_token, ghl_credential.location_id, contact_id)
+                else:
+                    conv_id=conv_data.get('conversations')[0].get('id')
+
+                GHLContactCache.objects.update_or_create(
+                    phone_number=ph_no,
+                    contact_id=contact_id,
+                    conversation_id=conv_id
+                )
+
             if direction == 'Outbound':
                 add_external_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
             else:
                 add_inbound_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
 
+        navigation = response_data.get('navigation', {})
+        next_page = navigation.get('nextPage', {}).get('uri')
+        if not next_page:
+            break
+        url = next_page
+        params = None
+
+    print('everything worked..')
     return JsonResponse({"message": "Processed call records successfully"})

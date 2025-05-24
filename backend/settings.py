@@ -147,6 +147,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'accounts.tasks.make_api_call',
         'schedule': timedelta(hours=23),
     },
+    'make-api-call-every-5-minutes': {
+        'task': 'accounts.tasks.get_company_call_records_task',
+        'schedule': timedelta(minutes=5),
+    },
 }
 
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
