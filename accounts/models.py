@@ -30,7 +30,7 @@ class RCToken(models.Model):
 
 class GHLContactCache(models.Model):
     phone_number = models.CharField(max_length=20, unique=True)
-    contact_id = models.CharField(max_length=100)
+    contact_id = models.CharField(max_length=100, null=True, blank=True)
     conversation_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -4,8 +4,10 @@ from django.http import JsonResponse
 
 
 import requests, base64
-from datetime import datetime, timedelta
-from django.utils.timezone import now
+from datetime import datetime, timedelta, timezone
+from django.utils.timezone  import now
+from django.utils import timezone as dj_timezone
+
 import pytz 
 
 from .models import GHLAuthCredentials, RCToken, GHLContactCache
@@ -28,6 +30,8 @@ RINGCENTRAL_CLIENT_ID = settings.RINGCENTRAL_CLIENT_ID
 RINGCENTRAL_CLIENT_SECRET = settings.RINGCENTRAL_CLIENT_SECRET
 RINGCENTRAL_JWT = settings.RINGCENTRAL_JWT
 RINGCENTRAL_PHONE = settings.RINGCENTRAL_PHONE
+
+denver_tz = pytz.timezone("America/Denver")
 
 def auth_connect(request):
     scopes = "conversations.readonly conversations.write conversations/message.readonly conversations/message.write contacts.readonly contacts.write"
@@ -159,7 +163,11 @@ def get_company_call_records():
     ghl_credential = GHLAuthCredentials.objects.first()
     token = RCToken.objects.first()
 
-    date_from = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(timespec='milliseconds') + 'Z'
+    # Current time in Denver
+    now_denver = datetime.now(denver_tz)
+
+    # 5 minutes before now
+    date_from = (now_denver - timedelta(minutes=5)).astimezone(pytz.UTC).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
     print(date_from, 'date_from')
 
     page = 1
