@@ -14,7 +14,7 @@ class GHLAuthCredentials(models.Model):
     location_id = models.CharField(max_length=255, null=True, blank=True)
 
 class RCToken(models.Model):
-    owner_id = models.IntegerField()
+    owner_id = models.CharField(max_length=20)
     access_token = models.TextField()
     token_type = models.CharField(max_length=100)
     expires_in = models.IntegerField()
