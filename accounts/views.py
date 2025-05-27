@@ -159,7 +159,7 @@ def get_company_call_records():
     ghl_credential = GHLAuthCredentials.objects.first()
     token = RCToken.objects.first()
 
-    date_from = (datetime.utcnow() - timedelta(minutes=5)).isoformat(timespec='milliseconds') + 'Z'
+    date_from = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(timespec='milliseconds') + 'Z'
     print(date_from, 'date_from')
 
     page = 1
