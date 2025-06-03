@@ -187,22 +187,35 @@ def get_company_call_records():
             'Authorization': f"Bearer {token.access_token}"
         }
 
-        if url == base_url:
-            response = requests.get(url, headers=headers, params=params)
-        else:
-            response = requests.get(url, headers=headers)
+        try:
 
-        if response.status_code == 401:
-            print('token failed d')
-            token = refresh_ringcentral_token(token)
-            headers = {
-                'Authorization': f"Bearer {token.access_token}"
-            }
-            response = requests.get(url, headers=headers, params=params)
-            print('new_response', 'new token ', response.json())
+            if url == base_url:
+                response = requests.get(url, headers=headers, params=params)
+            else:
+                response = requests.get(url, headers=headers)
 
-        response_data = response.json()
-        print(response_data, 'response_data')
+            if response.status_code == 401:
+                print('token failed d')
+                token = refresh_ringcentral_token(token)
+                headers = {
+                    'Authorization': f"Bearer {token.access_token}"
+                }
+                response = requests.get(url, headers=headers, params=params)
+                print('new_response', 'new token ', response.json())
+
+            response.raise_for_status()
+            response_data = response.json()
+            print(response_data, response.status_code, 'response_data')
+
+        except requests.exceptions.HTTPError as e:
+            print(f"[HTTP ERROR] {e.response.status_code} - {e.response.text}")
+            return
+        except requests.exceptions.RequestException as e:
+            print(f"[REQUEST ERROR] {e}")
+            return
+        except ValueError as e:
+            print(f"[JSON ERROR] Failed to parse JSON: {e}")
+            return
 
         records = response_data.get('records')
         if not records:
