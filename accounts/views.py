@@ -302,6 +302,8 @@ def celery_toggle_view(request):
     return render(request, "toggle.html", {"toggle": toggle})
 
 def user_login(request):
+    if request.user.is_authenticated:
+        return redirect('celery_toggle')
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
