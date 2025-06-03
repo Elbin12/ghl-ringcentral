@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.http import JsonResponse
+from django.contrib import messages
 
 
 import requests, base64
@@ -10,7 +11,7 @@ from django.utils import timezone as dj_timezone
 
 import pytz 
 
-from .models import GHLAuthCredentials, RCToken, GHLContactCache
+from .models import GHLAuthCredentials, RCToken, GHLContactCache, CeleryIntegrationToggle
 from .utils import *
 from urllib.parse import quote
 
@@ -267,3 +268,19 @@ def get_company_call_records():
 
     print('everything worked..')
     return JsonResponse({"message": "Processed call records successfully"})
+
+
+def celery_toggle_view(request):
+    # Ensure exactly one toggle row exists
+    toggle, _ = CeleryIntegrationToggle.objects.get_or_create(id=1, defaults={"enabled": True})
+
+    if request.method == "POST":
+        toggle.enabled = "enabled" in request.POST   # checkbox present → True
+        toggle.save()
+        messages.success(
+            request,
+            f"Celery integration {'enabled' if toggle.enabled else 'disabled'}."
+        )
+        return redirect("celery_toggle")             # named route (see below)
+
+    return render(request, "toggle.html", {"toggle": toggle})

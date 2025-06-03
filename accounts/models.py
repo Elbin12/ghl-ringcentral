@@ -34,3 +34,6 @@ class GHLContactCache(models.Model):
     conversation_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+class CeleryIntegrationToggle(models.Model):
+    enabled = models.BooleanField(default=True)
