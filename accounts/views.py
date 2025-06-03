@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.http import JsonResponse
 from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
 
 
 import requests, base64
@@ -269,14 +271,15 @@ def get_company_call_records():
     print('everything worked..')
     return JsonResponse({"message": "Processed call records successfully"})
 
-
+@login_required(login_url='login')
 def celery_toggle_view(request):
     # Ensure exactly one toggle row exists
+    print("Authenticated:", request.user.is_authenticated)
     toggle, _ = CeleryIntegrationToggle.objects.get_or_create(id=1, defaults={"enabled": True})
 
     if request.method == "POST":
         toggle.enabled = "enabled" in request.POST   # checkbox present → True
-        toggle.save()
+        toggle.save()   
         messages.success(
             request,
             f"Celery integration {'enabled' if toggle.enabled else 'disabled'}."
@@ -284,3 +287,22 @@ def celery_toggle_view(request):
         return redirect("celery_toggle")             # named route (see below)
 
     return render(request, "toggle.html", {"toggle": toggle})
+
+def user_login(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        print(username, password, 'dod')
+        user = authenticate(request, username=username, password=password)
+        
+        if user is not None:
+            login(request, user)
+            return redirect("celery_toggle")  # Replace with your desired redirect URL
+        else:
+            messages.error(request, "Invalid username or password")
+
+    return render(request, "login.html")
+
+def user_logout(request):
+    logout(request)
+    return redirect('login')

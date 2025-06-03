@@ -8,5 +8,7 @@ urlpatterns = [
     path('auth/tokens/', views.tokens),
     path('ringcentral/access/', views.get_auth_from_jwt),
     path('call-records/', views.get_company_call_records),
-    path("celery/toggle/", views.celery_toggle_view, name="celery_toggle")
+    path("celery/toggle/", views.celery_toggle_view, name="celery_toggle"),
+    path('', views.user_login, name='login'),
+    path('logout/', views.user_logout, name='logout'),
 ]

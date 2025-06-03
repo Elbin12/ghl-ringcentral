@@ -3,6 +3,7 @@ from django.conf import settings
 from celery import shared_task
 from accounts.models import GHLAuthCredentials
 from .views import get_company_call_records
+from .models import CeleryIntegrationToggle
 
 GHL_CLIENT_ID = settings.GHL_CLIENT_ID
 GHL_CLIENT_SECRET = settings.GHL_CLIENT_SECRET
@@ -40,4 +41,9 @@ def make_api_call():
     
 @shared_task
 def get_company_call_records_task():
+    toggle = CeleryIntegrationToggle.objects.first()
+    if not toggle or not toggle.enabled:
+        print('returningggggg')
+        return
+    print('workinggggggg frrrrrooommm')
     get_company_call_records()
