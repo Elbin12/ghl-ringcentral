@@ -37,7 +37,7 @@ def search_conversations(access_token, contact_id, locationId):
         },
         params={"contactId": contact_id, "locationId": locationId}
     )
-    print("Raw response: search convvvv", response.status_code, response.text, response.json())
+    print("Raw response: search convvvv", response.status_code)
 
     if response.status_code == 200:
         return response.json()
@@ -145,7 +145,7 @@ def create_ghl_contact(access_token, locationId, phone, name):
         json=payload
     )
 
-    if response.status_code == 200:
+    if response.status_code == 201:
         return response.json().get("contact", {}).get("id")
     else:
         print("Failed to create contact:", response.json())
