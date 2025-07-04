@@ -43,7 +43,7 @@ def search_conversations(access_token, contact_id, locationId):
         return response.json()
     return None
 
-def add_inbound_call(access_token, conversationId, ph_no, conv_provider_id, rc_phone):
+def add_inbound_call(record_obj, access_token, conversationId, ph_no, conv_provider_id, rc_phone):
     url = "https://services.leadconnectorhq.com/conversations/messages/inbound"
 
     headers = {
@@ -69,12 +69,14 @@ def add_inbound_call(access_token, conversationId, ph_no, conv_provider_id, rc_p
 
     if response.status_code in [200, 201]:
         print("Internal call added to conversation.")
+        record_obj.is_message_created = True
+        record_obj.save()
         return response.json()
     else:
         print("Failed to add Internal call:", response.status_code)
         return None
 
-def add_external_call(access_token, conversationId, ph_no, conv_provider_id, rc_phone):
+def add_external_call(record_obj, access_token, conversationId, ph_no, conv_provider_id, rc_phone):
     url = "https://services.leadconnectorhq.com/conversations/messages/outbound"
 
     headers = {
@@ -98,6 +100,8 @@ def add_external_call(access_token, conversationId, ph_no, conv_provider_id, rc_
 
     if response.status_code in [200, 201]:
         print("External call added to conversation.")
+        record_obj.is_message_created = True
+        record_obj.save()
         return response.json()
     else:
         print("Failed to add external call:")

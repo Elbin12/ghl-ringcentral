@@ -13,7 +13,7 @@ from django.utils import timezone as dj_timezone
 
 import pytz 
 
-from .models import GHLAuthCredentials, RCToken, GHLContactCache, CeleryIntegrationToggle
+from .models import GHLAuthCredentials, RCToken, GHLContactCache, CeleryIntegrationToggle, Records
 from .utils import *
 from urllib.parse import quote
 
@@ -231,6 +231,7 @@ def get_company_call_records():
 
         for record in records:
             direction = record.get('direction')
+            id = record.get('id')
             if direction == 'Outbound':
                 ph_no = record.get('to', {}).get('phoneNumber')
                 name = record.get('to', {}).get('name')
@@ -239,6 +240,11 @@ def get_company_call_records():
                 name = record.get('from', {}).get('name')
             print(ph_no, 'phone number from record')
             cache = GHLContactCache.objects.filter(phone_number=ph_no).first()
+            record_obj, created = Records.objects.get_or_create(record_id=id, defaults={'direction': direction})
+
+            if not created and record_obj.is_message_created:
+                continue
+
             if cache:
                 contact_id = cache.contact_id
                 conv_id = cache.conversation_id
@@ -268,11 +274,14 @@ def get_company_call_records():
                     contact_id=contact_id,
                     conversation_id=conv_id
                 )
+                
+            record_obj.ghl_contact_id = contact_id
+            record_obj.save()
 
             if direction == 'Outbound':
-                add_external_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
+                add_external_call(record_obj, access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
             else:
-                add_inbound_call(access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
+                add_inbound_call(record_obj, access_token=ghl_credential.access_token, conversationId=conv_id, ph_no=ph_no, conv_provider_id=GHL_CONV_PROVIDER_ID, rc_phone=RINGCENTRAL_PHONE)
 
         navigation = response_data.get('navigation', {})
         next_page = navigation.get('nextPage', {}).get('uri')

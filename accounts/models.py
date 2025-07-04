@@ -37,3 +37,9 @@ class GHLContactCache(models.Model):
 
 class CeleryIntegrationToggle(models.Model):
     enabled = models.BooleanField(default=True)
+
+class Records(models.Model):
+    record_id = models.CharField(max_length=200)
+    direction = models.CharField(max_length=200)
+    ghl_contact_id = models.CharField(max_length=100, null=True, blank=True)
+    is_message_created = models.BooleanField(default=False)
