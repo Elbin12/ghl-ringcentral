@@ -227,7 +227,7 @@ def get_company_call_records():
             url = next_page
             params = None
             continue
-            # return JsonResponse({"message": "No records found"})
+            # return "No records found"
 
         for record in records:
             direction = record.get('direction')
@@ -282,7 +282,7 @@ def get_company_call_records():
         params = None
 
     print('everything worked..')
-    return JsonResponse({"message": "Processed call records successfully"})
+    return "Processed call records successfully"
 
 @login_required(login_url='login')
 def celery_toggle_view(request):
